@@ -1,70 +1,106 @@
-import twilio from 'twilio';
+import axios from 'axios';
 
-const SINGLE_SMS_LIMIT = 160;
+const MAX_SMS_TEXT_LENGTH = 1000;
 
-// Convert local Sri Lankan numbers to E.164 for Twilio
-const normalizeToE164 = (raw) => {
+// Convert Sri Lankan numbers to Text.lk-compatible format: 94XXXXXXXXX.
+const normalizeToTextLkRecipient = (raw) => {
   if (!raw) return '';
 
   const cleaned = String(raw).replace(/[^\d+]/g, '');
 
-  if (cleaned.startsWith('+')) return cleaned;
-  if (cleaned.startsWith('94')) return `+${cleaned}`;
-  if (cleaned.startsWith('0')) return `+94${cleaned.slice(1)}`;
+  if (cleaned.startsWith('+94')) return cleaned.slice(1);
+  if (cleaned.startsWith('94')) return cleaned;
+  if (cleaned.startsWith('0')) return `94${cleaned.slice(1)}`;
 
   return cleaned;
 };
 
-const singleSegmentText = (text) => {
+const normalizeMessageText = (text) => {
   if (!text) return '';
   const compact = String(text).replace(/\s+/g, ' ').trim();
-  if (compact.length <= SINGLE_SMS_LIMIT) return compact;
-  return `${compact.slice(0, SINGLE_SMS_LIMIT - 3)}...`;
+  if (compact.length <= MAX_SMS_TEXT_LENGTH) return compact;
+  return `${compact.slice(0, MAX_SMS_TEXT_LENGTH - 3)}...`;
 };
 
 /**
- * Send an SMS notification via Twilio.
- * @param {string} to   - E.164 phone number e.g. +1234567890
- * @param {string} body - SMS text body
+ * Send an SMS notification via Text.lk HTTP API.
+ * @param {string} to   - Sri Lankan phone number (e.g., 077xxxxxxx / +9477xxxxxxx / 9477xxxxxxx)
+ * @param {string} body - Message text body
+ * @param {{ senderId?: string }} [options]
  * @returns {{ success: boolean, error?: string }}
  */
-export const sendSMS = async (to, body) => {
+export const sendSMS = async (to, body, options = {}) => {
   try {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken  = process.env.TWILIO_AUTH_TOKEN;
-    const from       = process.env.TWILIO_PHONE_NUMBER;
-    const normalizedTo = normalizeToE164(to);
-    const smsBody = singleSegmentText(body);
+    const endpoint = process.env.TEXTLK_HTTP_ENDPOINT || 'https://app.text.lk/api/http/sms/send';
+    const apiToken = process.env.TEXTLK_API_TOKEN;
+    const senderId = process.env.TEXTLK_SENDER_ID || '';
+    const normalizedTo = normalizeToTextLkRecipient(to);
+    const smsBody = normalizeMessageText(body);
 
-    if (!accountSid || !authToken || !from) {
-      console.warn('[SMSService] Twilio credentials not set — skipping SMS');
-      return { success: false, error: 'Twilio credentials not configured' };
+    if (!apiToken) {
+      console.warn('[SMSService] Text.lk API token not set - skipping notification');
+      return { success: false, error: 'Text.lk API token not configured' };
     }
 
-    const client = twilio(accountSid, authToken);
-    const message = await client.messages.create({ body: smsBody, from, to: normalizedTo });
-    
+    if (!normalizedTo) {
+      return { success: false, error: 'Recipient phone number is invalid' };
+    }
+
+    const payload = {
+      recipient: normalizedTo,
+      message: smsBody,
+    };
+
+    const effectiveSenderId = options.senderId || senderId;
+    if (effectiveSenderId) payload.sender_id = effectiveSenderId;
+
+    const response = await axios.get(endpoint, {
+      params: {
+        api_token: apiToken,
+        ...payload,
+      },
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+
+    const responseBody = response.data || {};
+    const statusValue = String(responseBody.status || '').toLowerCase();
+    const isSuccess = response.status >= 200
+      && response.status < 300
+      && (statusValue === 'success' || statusValue === 'ok');
+
+    if (!isSuccess) {
+      const providerMessage = responseBody.message || 'Unknown provider response';
+      return {
+        success: false,
+        error: `${providerMessage} (http ${response.status})`,
+      };
+    }
+
     return { success: true };
   } catch (error) {
-    const detail = error.message || String(error);
-    console.error(`[SMSService] Failed to send SMS to ${to}: ${detail}`);
+    const providerError = error.response?.data;
+    const detail = providerError
+      ? JSON.stringify(providerError)
+      : (error.message || String(error));
+    console.error(`[SMSService] Failed to send message to ${to}: ${detail}`);
     return { success: false, error: detail };
   }
 };
 
-//SMS message templates 
+// SMS message templates
 
 export const appointmentBookedSMS = ({ recipientName, doctorName, date, time }) =>
-  singleSegmentText(`HCP: Hi ${recipientName}, appt booked with Dr. ${doctorName} on ${date} at ${time}.`);
+  normalizeMessageText(`Mediconnect: Hi ${recipientName}, appointment booked with Dr. ${doctorName} on ${date} at ${time}.`);
 
 export const appointmentConfirmedSMS = ({ recipientName, doctorName, date, time }) =>
-  singleSegmentText(`HCP: Hi ${recipientName}, appt confirmed with Dr. ${doctorName} on ${date} at ${time}.`);
+  normalizeMessageText(`Mediconnect: Hi ${recipientName}, appointment confirmed with Dr. ${doctorName} on ${date} at ${time}.`);
 
 export const appointmentCancelledSMS = ({ recipientName, doctorName, date, time }) =>
-  singleSegmentText(`HCP: Hi ${recipientName}, appt with Dr. ${doctorName} on ${date} at ${time} was cancelled. Please rebook.`);
+  normalizeMessageText(`Mediconnect: Hi ${recipientName}, appointment with Dr. ${doctorName} on ${date} at ${time} was cancelled. Please rebook.`);
 
 export const appointmentCompletedSMS = ({ recipientName, doctorName }) =>
-  singleSegmentText(`HCP: Hi ${recipientName}, your appointment with Dr. ${doctorName} is completed.`);
+  normalizeMessageText(`Mediconnect: Hi ${recipientName}, your appointment with Dr. ${doctorName} is completed.`);
 
 export const consultationCompletedSMS = ({ recipientName, doctorName, durationMinutes }) =>
-  singleSegmentText(`HCP: Hi ${recipientName}, video consultation with Dr. ${doctorName}${durationMinutes ? ` (${durationMinutes} min)` : ''} is completed.`);
+  normalizeMessageText(`Mediconnect: Hi ${recipientName}, video consultation with Dr. ${doctorName}${durationMinutes ? ` (${durationMinutes} min)` : ''} is completed.`);
