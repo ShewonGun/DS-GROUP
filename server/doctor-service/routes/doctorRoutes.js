@@ -13,7 +13,7 @@ import {
   toggleAvailability,
   verifyDoctor,
 } from '../controllers/doctorController.js';
-//import { getPatientDetails, getPatientReports, getPatientReportById } from '../controllers/reportController.js';
+import { getPatientDetails, getPatientReports, getPatientReportById } from '../controllers/reportController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 import { serviceProtect } from '../middlewares/serviceMiddleware.js';
 import { upload } from '../config/cloudinaryConfig.js';
@@ -39,9 +39,9 @@ router.put('/deactivate', protect, deactivateAccount);
 router.delete('/delete', protect, deleteAccount);
 
 // Patient data — doctor can view (protected)
-//router.get('/patients/:patientId', protect, getPatientDetails);
-//router.get('/patients/:patientId/reports', protect, getPatientReports);
-//router.get('/patients/:patientId/reports/:reportId', protect, getPatientReportById);
+router.get('/patients/:patientId', protect, getPatientDetails);
+router.get('/patients/:patientId/reports', protect, getPatientReports);
+router.get('/patients/:patientId/reports/:reportId', protect, getPatientReportById);
 
 router.get('/:id', getDoctorById);
 
