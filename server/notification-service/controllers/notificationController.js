@@ -1,6 +1,12 @@
 import Notification from '../models/Notification.js';
 import { sendEmail, appointmentBookedEmail, appointmentConfirmedEmail, appointmentCancelledEmail, appointmentCompletedEmail, consultationCompletedEmail } from '../utils/emailService.js';
-import { sendSMS, appointmentBookedSMS, appointmentConfirmedSMS, appointmentCancelledSMS, appointmentCompletedSMS, consultationCompletedSMS } from '../utils/smsService.js';
+import {
+  sendSMS,
+  appointmentBookedSMS,
+  appointmentConfirmedSMS,
+  appointmentCancelledSMS,
+  appointmentCompletedSMS,
+} from '../utils/smsService.js';
 
 // Internal helper 
  //Dispatch email + SMS for a recipient and persist to DB.
@@ -19,6 +25,8 @@ const dispatchNotification = async ({
 }) => {
   let emailSent = false, emailError = null;
   let smsSent   = false, smsError   = null;
+  const fallbackPhone = process.env.TEXTLK_TEST_RECIPIENT || null;
+  const targetPhone = phone || fallbackPhone;
 
   // Send email
   if (email && emailHtml) {
@@ -27,11 +35,16 @@ const dispatchNotification = async ({
     emailError = result.error || null;
   }
 
-  // Send SMS
-  if (phone && smsText) {
-    const result = await sendSMS(phone, smsText);
+  // Send SMS via Text.lk
+  if (targetPhone && smsText) {
+    if (!phone && fallbackPhone) {
+      console.warn(`[Notification] Using TEXTLK_TEST_RECIPIENT fallback for recipientId=${recipientId}`);
+    }
+    const result = await sendSMS(targetPhone, smsText);
     smsSent  = result.success;
     smsError = result.error || null;
+  } else if (smsText && !targetPhone) {
+    smsError = 'Recipient phone is missing';
   }
 
   // Persist notification record
@@ -46,7 +59,7 @@ const dispatchNotification = async ({
     smsSent,
     smsError,
     sentToEmail:   email  || null,
-    sentToPhone:   phone  || null,
+    sentToPhone:   smsText ? (targetPhone || null) : null,
     referenceId:   referenceId   || null,
     referenceType: referenceType || null,
   });
@@ -246,7 +259,6 @@ export const notifyConsultationCompleted = async (req, res) => {
       email:         patient.email,
       phone:         patient.phone,
       emailHtml:     consultationCompletedEmail({ recipientName: patient.name, ...templateData }),
-      smsText:       consultationCompletedSMS({ recipientName: patient.name, ...templateData }),
       referenceId:   session._id,
       referenceType: 'session',
     });
@@ -260,7 +272,6 @@ export const notifyConsultationCompleted = async (req, res) => {
       email:         doctor.email,
       phone:         doctor.phone,
       emailHtml:     consultationCompletedEmail({ recipientName: `Dr. ${doctor.name}`, ...templateData }),
-      smsText:       consultationCompletedSMS({ recipientName: `Dr. ${doctor.name}`, ...templateData }),
       referenceId:   session._id,
       referenceType: 'session',
     });
