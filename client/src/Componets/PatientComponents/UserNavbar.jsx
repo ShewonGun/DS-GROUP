@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { FiUsers, FiZap, FiCalendar, FiFileText, FiUser, FiHeart, FiSun, FiMoon, FiChevronDown, FiLogOut, FiX, FiMenu } from 'react-icons/fi';
+import { FiUsers, FiZap, FiCalendar, FiFileText, FiUser, FiHeart, FiSun, FiMoon, FiChevronDown, FiLogOut, FiX, FiMenu, FiActivity } from 'react-icons/fi';
 import { MdDashboard } from 'react-icons/md';
-import { FaHeartbeat } from 'react-icons/fa';
 
 const NAV_LINKS = [
   {
@@ -65,7 +64,7 @@ const UserNavbar = () => {
             className="flex items-center gap-2 font-bold text-indigo-600 dark:text-indigo-400 text-lg"
           >
             <div className="w-8 h-8 bg-indigo-600 dark:bg-indigo-500 rounded-md flex items-center justify-center">
-              <FaHeartbeat className="w-5 h-5 text-white" />
+              <FiActivity className="w-5 h-5 text-white" />
             </div>
             Mediconnect
           </button>
