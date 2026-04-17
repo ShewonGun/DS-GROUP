@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../../utils/api';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../Context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
-import { FiSun, FiMoon, FiChevronLeft } from 'react-icons/fi';
-import { FaHeartbeat } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
+import { FiActivity, FiSun, FiMoon } from 'react-icons/fi';
 
 const ROLES = [
   { value: 'patient', label: 'Patient' },
@@ -39,10 +39,12 @@ const LoginPage = () => {
       // Inject role for patient/doctor services (they don't return `role` directly)
       if (!data.role) data.role = role;
       saveUser(data);
+      toast.success('Login successful.');
       navigate(DASHBOARD[role]);
     } catch (err) {
       const msg = err.response?.data?.message || 'Login failed. Please try again.';
       setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -50,16 +52,6 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
-
-      {/* Back to landing */}
-      <Link
-        to="/"
-        className="fixed top-4 left-4 p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-        title="Back to landing"
-        aria-label="Back to landing"
-      >
-        <FiChevronLeft className="w-4 h-4" />
-      </Link>
 
       {/* Theme toggle — top right */}
       <button
@@ -75,7 +67,7 @@ const LoginPage = () => {
         {/* Logo / Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-indigo-600 rounded-md mb-4">
-            <FaHeartbeat className="w-6 h-6 text-white" />
+            <FiActivity className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Welcome back</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Sign in to MediConnect</p>
