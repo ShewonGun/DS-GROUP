@@ -1,10 +1,12 @@
 import { useState, useRef } from 'react';
 import { reportAPI } from '../../utils/api';
+import useLockBodyScroll from '../../utils/useLockBodyScroll';
 import { FiX, FiUploadCloud, FiCheckCircle } from 'react-icons/fi';
 import { REPORT_TYPES } from './ReportCard';
 
 // ── Add Lab Report Modal ──────────────────────────────────────────────────────
 const AddLabReportModal = ({ onClose, onUploaded }) => {
+  useLockBodyScroll();
   const [title, setTitle]         = useState('');
   const [description, setDesc]    = useState('');
   const [reportType, setType]     = useState('lab_report');

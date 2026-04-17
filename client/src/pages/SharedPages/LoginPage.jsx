@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authAPI } from '../../utils/api';
 import { useAuth } from '../../Context/AuthContext';
-import { useTheme } from '../../context/ThemeContext';
-import { toast } from 'react-hot-toast';
-import { FiActivity, FiSun, FiMoon } from 'react-icons/fi';
+import { useTheme } from '../../Context/ThemeContext';
+import { FiSun, FiMoon, FiChevronLeft } from 'react-icons/fi';
+import { FaHeartbeat } from 'react-icons/fa';
+import { GoogleLogin } from '@react-oauth/google';
 
 const ROLES = [
   { value: 'patient', label: 'Patient' },
@@ -29,6 +30,35 @@ const LoginPage = () => {
   const [error, setError]     = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleGoogleSuccess = async (credentialResponse) => {
+    const idToken = credentialResponse?.credential;
+    if (!idToken) {
+      setError('Google login failed. Please try again.');
+      return;
+    }
+
+    if (role === 'admin') {
+      setError('Google login is not enabled for admin accounts.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+    try {
+      const res = await authAPI.googleAuth(role, idToken);
+      const data = res.data.data;
+      if (!data.role) data.role = role;
+      data.authProvider = 'google';
+      saveUser(data);
+      navigate(DASHBOARD[role]);
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Google login failed. Please try again.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -38,13 +68,12 @@ const LoginPage = () => {
       const data = res.data.data;
       // Inject role for patient/doctor services (they don't return `role` directly)
       if (!data.role) data.role = role;
+      data.authProvider = 'local';
       saveUser(data);
-      toast.success('Login successful.');
       navigate(DASHBOARD[role]);
     } catch (err) {
       const msg = err.response?.data?.message || 'Login failed. Please try again.';
       setError(msg);
-      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -52,6 +81,16 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center px-4">
+
+      {/* Back to landing */}
+      <Link
+        to="/"
+        className="fixed top-4 left-4 p-2 rounded-md text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        title="Back to landing"
+        aria-label="Back to landing"
+      >
+        <FiChevronLeft className="w-4 h-4" />
+      </Link>
 
       {/* Theme toggle — top right */}
       <button
@@ -67,7 +106,7 @@ const LoginPage = () => {
         {/* Logo / Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-indigo-600 rounded-md mb-4">
-            <FiActivity className="w-6 h-6 text-white" />
+            <FaHeartbeat className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Welcome back</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Sign in to MediConnect</p>
@@ -130,6 +169,23 @@ const LoginPage = () => {
           >
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
+
+          {role !== 'admin' && (
+            <div className="pt-2">
+              <div className="relative my-2 text-center text-xs text-gray-500 dark:text-gray-400">
+                <span className="px-2 bg-white dark:bg-gray-900 relative z-10">or continue with</span>
+                <div className="absolute left-0 right-0 top-1/2 border-t border-gray-200 dark:border-gray-700 z-0" />
+              </div>
+              <div className="w-full [&>div]:w-full">
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => setError('Google login failed. Please try again.')}
+                  useOneTap={false}
+                  width="100%"
+                />
+              </div>
+            </div>
+          )}
         </form>
 
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">

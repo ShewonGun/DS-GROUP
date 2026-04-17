@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { appointmentAPI, paymentAPI } from '../../utils/api';
+import { appointmentAPI, paymentAPI, telemedicineAPI } from '../../utils/api';
+import useLockBodyScroll from '../../utils/useLockBodyScroll';
 import { FiPlus, FiAlertCircle, FiCalendar } from 'react-icons/fi';
 import AppointmentCard, { isUpcoming, isCancellable, formatDate, formatTime } from '../../Componets/PatientComponents/AppointmentCard';
+import DeleteConfirmModal from '../../Componets/SharedComponents/DeleteConfirmModal';
 
 const TABS = [
   { key: 'all',       label: 'All' },
@@ -13,6 +15,7 @@ const TABS = [
 
 // Cancel modal
 const CancelModal = ({ appointment, onConfirm, onClose, loading }) => {
+  useLockBodyScroll();
   const [reason, setReason] = useState('');
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -69,15 +72,19 @@ const MyAppointments = () => {
   const [cancelTarget, setCancelTarget]   = useState(null);
   const [cancelling, setCancelling]       = useState(false);
   const [cancelError, setCancelError]     = useState('');
+  const [deleteTarget, setDeleteTarget]   = useState(null);
+  const [deletingId, setDeletingId]       = useState('');
 
   useEffect(() => {
     Promise.all([
       appointmentAPI.getMine(),
       paymentAPI.getMine().catch(() => ({ data: { data: [] } })),
+      telemedicineAPI.getMySessions().catch(() => ({ data: { data: [] } })),
     ])
-      .then(([apptRes, payRes]) => {
+      .then(([apptRes, payRes, sessRes]) => {
         const appts    = apptRes.data.data || [];
         const payments = payRes.data.data  || [];
+        const sessions = sessRes.data.data || [];
 
         // Build a lookup: appointmentId → payment status
         const paidIds = new Set(
@@ -86,10 +93,25 @@ const MyAppointments = () => {
             .map((p) => p.appointmentId)
         );
 
+        // Build a lookup: appointmentId -> latest telemedicine session status
+        const sessionStatusByAppointment = sessions.reduce((acc, s) => {
+          if (!s?.appointmentId) return acc;
+          const existing = acc[s.appointmentId];
+          if (!existing || new Date(s.updatedAt || s.createdAt || 0) > new Date(existing.updatedAt || existing.createdAt || 0)) {
+            acc[s.appointmentId] = s;
+          }
+          return acc;
+        }, {});
+
         // Merge: if payment service says completed, override appointment paymentStatus
-        const merged = appts.map((a) =>
-          paidIds.has(a._id) ? { ...a, paymentStatus: 'paid' } : a
-        );
+        const merged = appts.map((a) => {
+          const session = sessionStatusByAppointment[a._id];
+          return {
+            ...a,
+            paymentStatus: paidIds.has(a._id) ? 'paid' : a.paymentStatus,
+            telemedicineSessionStatus: session?.status || null,
+          };
+        });
 
         setAppointments(merged);
       })
@@ -110,6 +132,10 @@ const MyAppointments = () => {
 
   // Pagination
   const totalPages = Math.ceil(sorted.length / ITEMS_PER_PAGE);
+  const safeTotalPages = Math.max(1, totalPages);
+  const groupStart = Math.floor((currentPage - 1) / 5) * 5 + 1;
+  const groupEnd = Math.min(groupStart + 4, safeTotalPages);
+  const visiblePages = Array.from({ length: groupEnd - groupStart + 1 }, (_, i) => groupStart + i);
   const paginated  = sorted.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   // Reset page when tab changes
@@ -140,6 +166,21 @@ const MyAppointments = () => {
     } catch (err) {
       setCancelError(err.response?.data?.message || 'Failed to cancel. Please try again.');
       setCancelling(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget?._id) return;
+    setCancelError('');
+    setDeletingId(deleteTarget._id);
+    try {
+      await appointmentAPI.deleteCancelled(deleteTarget._id);
+      setAppointments((prev) => prev.filter((a) => a._id !== deleteTarget._id));
+      setDeleteTarget(null);
+    } catch (err) {
+      setCancelError(err.response?.data?.message || 'Failed to delete cancelled appointment.');
+    } finally {
+      setDeletingId('');
     }
   };
 
@@ -233,6 +274,8 @@ const MyAppointments = () => {
               appt={appt}
               navigate={navigate}
               onCancel={(a) => { setCancelError(''); setCancelTarget(a); }}
+              onDeleteCancelled={(a) => setDeleteTarget(a)}
+              deletingId={deletingId}
             />
           ))}
         </div>
@@ -248,7 +291,7 @@ const MyAppointments = () => {
           >
             ← Prev
           </button>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+          {visiblePages.map((page) => (
             <button
               key={page}
               onClick={() => setCurrentPage(page)}
@@ -262,8 +305,8 @@ const MyAppointments = () => {
             </button>
           ))}
           <button
-            onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(p + 1, safeTotalPages))}
+            disabled={currentPage === safeTotalPages}
             className="px-3 py-1.5 rounded-md text-sm border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition"
           >
             Next →
@@ -278,6 +321,18 @@ const MyAppointments = () => {
           onConfirm={handleCancelConfirm}
           onClose={() => { setCancelTarget(null); setCancelError(''); }}
           loading={cancelling}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmModal
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteConfirm}
+          loading={deletingId === deleteTarget._id}
+          title="Delete cancelled appointment?"
+          message="This cancelled appointment will be permanently removed from your list. This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Keep"
         />
       )}
     </div>

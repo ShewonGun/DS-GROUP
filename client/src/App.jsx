@@ -17,8 +17,8 @@ import MyReports from './Pages/PatientPages/MyReports';
 import SymptomChecker from './Pages/PatientPages/SymptomChecker';
 import AppointmentDetails from './Pages/DoctorPages/AppointmentDetails';
 import DoctorAppointments from './Pages/DoctorPages/DoctorAppointments';
-//import DoctorProfile from './Pages/DoctorPages/DoctorProfile';
-//import DoctorTelemedicineRoom from './Pages/DoctorPages/DoctorTelemedicineRoom';
+import DoctorProfile from './Pages/DoctorPages/DoctorProfile';
+import DoctorTelemedicineRoom from './Pages/DoctorPages/DoctorTelemedicineRoom';
 import AdminLayout from './layouts/AdminLayout';
 import AdminDashboard from './Pages/AdminPages/AdminDashboard';
 import ManageDoctors from './Pages/AdminPages/ManageDoctors';
@@ -29,8 +29,8 @@ import ManagePayments from './Pages/AdminPages/ManagePayments';
 import AdminProfile from './Pages/AdminPages/AdminProfile';
 import Landing from './Pages/SharedPages/Landing';
 import PatientDashboard from './Pages/PatientPages/PatientDashboard';
-//import DoctorDashboard from './Pages/DoctorPages/DoctorDashboard';
-import { useTheme } from './context/ThemeContext';
+import DoctorDashboard from './Pages/DoctorPages/DoctorDashboard';
+import { useTheme } from './Context/ThemeContext';
 import { Toaster } from 'react-hot-toast';
 
 const App = () => {
